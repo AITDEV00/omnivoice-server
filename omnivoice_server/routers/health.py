@@ -12,6 +12,7 @@ router = APIRouter()
 
 
 @router.get("/health")
+@router.get("/health-check")
 async def health(request: Request):
     """Readiness check. Returns 503 while model is loading, 200 when ready."""
     cfg = request.app.state.cfg

@@ -157,6 +157,7 @@ async def streaming_synthesis():
                 "Each sentence is synthesized and sent as soon as it's ready. "
                 "This enables lower latency for long-form content.",
                 "stream": True,
+                "response_format": "pcm",  # Streaming only supports PCM
                 "position_temperature": 0.0,  # Deterministic voice for consistency
             },
         ) as response:
@@ -324,6 +325,11 @@ def main():
 
     except httpx.HTTPStatusError as e:
         print(f"✗ HTTP error: {e.response.status_code}")
+        # For streaming responses, the body must be read before .text is available.
+        try:
+            e.response.read()
+        except Exception:
+            pass
         print(f"  {e.response.text}")
     except Exception as e:
         print(f"✗ Error: {e}")

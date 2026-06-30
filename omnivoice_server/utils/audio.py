@@ -63,11 +63,16 @@ def tensor_to_wav_bytes(tensor: torch.Tensor | np.ndarray) -> bytes:
     """
     Convert (1, T) float32 tensor or numpy array to 16-bit PCM WAV bytes.
     """
+    import time as _time
+    _t0 = _time.monotonic()
+
     validate_audio_tensor(tensor, "tensor_to_wav_bytes")
 
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
     cpu_tensor = tensor.detach().cpu()
+    _t_cpu = _time.monotonic() - _t0
+
     if cpu_tensor.dim() == 1:
         cpu_tensor = cpu_tensor.unsqueeze(0)
 
@@ -78,9 +83,18 @@ def tensor_to_wav_bytes(tensor: torch.Tensor | np.ndarray) -> bytes:
             cpu_tensor = cpu_tensor.T
 
     buf = io.BytesIO()
+    _t_wav_start = _time.monotonic()
     sf.write(buf, cpu_tensor.numpy(), SAMPLE_RATE, format="WAV", subtype="PCM_16")
     buf.seek(0)
-    return buf.read()
+    result = buf.read()
+    _t_wav = _time.monotonic() - _t_wav_start
+
+    logger.info(
+        f"[TIMING] tensor_to_wav: cpu_transfer={_t_cpu*1000:.1f}ms "
+        f"sf_write={_t_wav*1000:.1f}ms total={(_time.monotonic()-_t0)*1000:.1f}ms "
+        f"samples={cpu_tensor.shape[-1]} bytes={len(result)}"
+    )
+    return result
 
 
 def tensors_to_wav_bytes(tensors: list[torch.Tensor | np.ndarray]) -> bytes:
@@ -110,12 +124,21 @@ def tensor_to_pcm16_bytes(tensor: torch.Tensor | np.ndarray) -> bytes:
     Convert (1, T) float32 tensor or numpy array to raw PCM int16 bytes.
     Used for streaming — no WAV header, continuous byte stream.
     """
+    import time as _time
+    _t0 = _time.monotonic()
+
     validate_audio_tensor(tensor, "tensor_to_pcm16_bytes")
 
     if isinstance(tensor, np.ndarray):
         tensor = torch.from_numpy(tensor)
     flat = tensor.squeeze(0).detach().cpu()
-    return (flat * 32767).clamp(-32768, 32767).to(torch.int16).numpy().tobytes()
+    result = (flat * 32767).clamp(-32768, 32767).to(torch.int16).numpy().tobytes()
+
+    logger.info(
+        f"[TIMING] tensor_to_pcm: {(_time.monotonic()-_t0)*1000:.1f}ms "
+        f"samples={flat.shape[-1] if flat.dim() > 0 else 0} bytes={len(result)}"
+    )
+    return result
 
 
 def _convert_wav_to_format(wav_bytes: bytes, output_format: str) -> bytes:
@@ -182,18 +205,31 @@ def tensors_to_formatted_bytes(
     Raises:
         RuntimeError: If pydub/ffmpeg not available or conversion fails
     """
+    import time as _time
+    _t0 = _time.monotonic()
+
     if response_format == "pcm":
         audio_bytes = b"".join(tensor_to_pcm16_bytes(t) for t in tensors)
+        logger.info(
+            f"[TIMING] tensors_to_formatted(pcm): {_time.monotonic()-_t0:.3f}s "
+            f"bytes={len(audio_bytes)}"
+        )
         return audio_bytes, "audio/pcm"
 
     # Generate WAV first
     wav_bytes = tensors_to_wav_bytes(tensors)
 
     if response_format == "wav":
+        logger.info(
+            f"[TIMING] tensors_to_formatted(wav): {(_time.monotonic()-_t0)*1000:.1f}ms "
+            f"bytes={len(wav_bytes)}"
+        )
         return wav_bytes, "audio/wav"
 
     # Convert to other formats using pydub
+    _t_fmt_start = _time.monotonic()
     converted = _convert_wav_to_format(wav_bytes, response_format)
+    _t_fmt = _time.monotonic() - _t_fmt_start
 
     media_types = {
         "mp3": "audio/mpeg",
@@ -205,6 +241,10 @@ def tensors_to_formatted_bytes(
     media_type = media_types.get(response_format)
     if media_type is None:
         raise ValueError(f"Unsupported format for media type: {response_format}")
+    logger.info(
+        f"[TIMING] tensors_to_formatted({response_format}): wav+convert={(_time.monotonic()-_t0)*1000:.1f}ms "
+        f"convert_only={_t_fmt*1000:.1f}ms bytes={len(converted)}"
+    )
     return converted, media_type
 
 

@@ -1,18 +1,24 @@
 # OmniVoice Benchmark Results
 
-Device: `cpu` | Steps: `32` | Runs per case: `5`
+Device: `cuda` | Steps: `32` | Runs per case: `50`
 
 ## Latency & RTF
 
 | Device | Steps | Test Case | Mean (ms) | p95 (ms) | Mean RTF | Errors |
 |--------|-------|-----------|-----------|----------|----------|--------|
-| cpu | 32 | short_auto | 10232 | 10446 | 4.9193 | 0 |
+| cuda | 32 | long_auto | 997 | 1198 | 0.0580 | 0 |
+| cuda | 32 | medium_auto | 683 | 800 | 0.0636 | 0 |
+| cuda | 32 | short_auto | 729 | 841 | 0.3507 | 0 |
+| cuda | 32 | short_design | 733 | 849 | 0.4197 | 0 |
 
 ## Memory (RAM across all runs)
 
 | Test Case | Initial RAM (MB) | Final RAM (MB) | Total Δ (MB) | Leak? |
 |-----------|-----------------|----------------|--------------|-------|
-| short_auto | 2480 | 2406 | -73 | ✅ NO |
+| long_auto | 2340 | 2346 | +6 | ✅ NO |
+| medium_auto | 2331 | 2333 | +2 | ✅ NO |
+| short_auto | 2323 | 2324 | +0 | ✅ NO |
+| short_design | 2346 | 2346 | +0 | ✅ NO |
 
 ## Interpretation
 

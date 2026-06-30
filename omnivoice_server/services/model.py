@@ -57,8 +57,15 @@ class ModelService:
                     from_pretrained_kwargs["cache_dir"] = str(self.cfg.model_cache_dir)
                 model = OmniVoice.from_pretrained(
                     self.cfg.model_id,
+                    load_asr=True,
+                    asr_model_name=self.cfg.asr_model_id,
                     **from_pretrained_kwargs,
                 )
+
+                # Apply omnivoice-triton optimization (after load, before NaN test)
+                if self.cfg.enable_triton and self.cfg.device == "cuda":
+                    self._apply_triton_optimization(model)
+
                 test = model.generate(text="test", num_step=4)
                 if self._has_nan(test):
                     logger.warning(f"dtype={dtype} produced NaN, trying next...")
@@ -84,7 +91,99 @@ class ModelService:
             f"RAM: {ram_before:.0f}MB -> {ram_after:.0f}MB "
             f"(+{ram_after - ram_before:.0f}MB)"
         )
+
+        # Instrument internal generate() stages for pipeline timing analysis.
+        # This wraps the model's internal methods (not the GPU kernels themselves)
+        # to measure where CPU-side time is spent inside model.generate().
+        self._instrument_generate_stages(self._model)
+
         self._loaded = True
+
+    def _instrument_generate_stages(self, model) -> None:
+        """Wrap OmniVoice.generate() internal methods with timing logs.
+
+        This does NOT modify GPU execution — it only adds perf_counter calls
+        around existing CPU-side methods to identify where the 266ms overhead
+        between pure GPU (153ms) and server model.generate (419ms) is spent.
+        """
+        import functools
+        import time as _time
+
+        timed_methods = [
+            "_preprocess_all",
+            "_generate_iterative",
+            "_decode_and_post_process",
+            "_prepare_inference_inputs",
+            "_estimate_target_tokens",
+        ]
+
+        for method_name in timed_methods:
+            original = getattr(model, method_name, None)
+            if original is None:
+                continue
+
+            def _make_wrapper(name, orig):
+                @functools.wraps(orig)
+                def _wrapper(*args, **kwargs):
+                    t0 = _time.monotonic()
+                    result = orig(*args, **kwargs)
+                    elapsed_ms = (_time.monotonic() - t0) * 1000
+                    logger.info(
+                        f"[TIMING] OmniVoice.{name}={elapsed_ms:.1f}ms"
+                    )
+                    return result
+                return _wrapper
+
+            setattr(model, method_name, _make_wrapper(method_name, original))
+            logger.debug(f"Instrumented OmniVoice.{method_name} with timing")
+
+    def _apply_triton_optimization(self, model) -> None:
+        """Apply omnivoice-triton kernel fusion + CUDA Graph to the loaded model.
+
+        Patches are applied transparently — model.generate() keeps the same
+        signature and behaviour, but the internal forward pass uses fused
+        Triton kernels and/or CUDA Graph replay for up to 4.66x speedup.
+
+        Modes:
+            - triton:  RMSNorm + SwiGLU + FusedNormResidual kernel fusion
+            - faster:  CUDA Graph capture/replay (eliminates kernel launch overhead)
+            - hybrid:  Both combined (fastest, ~4.66x)
+            - +sage:   SageAttention quantized attention (optional, on by default)
+        """
+        from omnivoice_triton.models.patching import (
+            apply_sage_attention,
+            apply_triton_kernels,
+            find_patchable_model,
+)
+
+        mode = self.cfg.triton_mode
+        logger.info(
+            f"Applying omnivoice-triton optimization: mode={mode}, "
+            f"sage={self.cfg.triton_enable_sage}"
+        )
+
+        patchable = find_patchable_model(model)
+
+        # Apply Triton kernel fusion (for triton and hybrid modes)
+        if mode in ("triton", "hybrid"):
+            count = apply_triton_kernels(patchable, patch_range=(0, 24))
+            logger.info(f"Triton kernels applied: {count} patches")
+
+        # Apply SageAttention
+        if self.cfg.triton_enable_sage:
+            sage_count = apply_sage_attention(patchable, patch_range=(0, 24))
+            logger.info(f"SageAttention patched: {sage_count} attention modules")
+
+        # Install CUDA Graph wrapper (for faster and hybrid modes)
+        if mode in ("faster", "hybrid"):
+            from omnivoice_triton.models.faster_runner import _CUDAGraphForward
+
+            graph_fwd = _CUDAGraphForward(model)
+            model.forward = graph_fwd
+            logger.info(
+                f"CUDA Graph wrapper installed (mode={mode}). "
+                "First inference per shape will capture the graph."
+            )
 
     def _dtype_candidates(self) -> list:
         if self.cfg.device in ("cuda", "mps"):

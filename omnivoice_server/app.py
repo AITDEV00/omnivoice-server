@@ -139,7 +139,7 @@ def create_app(cfg: Settings) -> FastAPI:
             if request.method == "OPTIONS":
                 return await call_next(request)
             # Skip auth for health, metrics, and model listing
-            if request.url.path in ("/health", "/metrics", "/v1/models"):
+            if request.url.path in ("/health", "/health-check", "/metrics", "/v1/models"):
                 return await call_next(request)
             auth = request.headers.get("Authorization", "")
             if auth != f"Bearer {cfg.api_key}":

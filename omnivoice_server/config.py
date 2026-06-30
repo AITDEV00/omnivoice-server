@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         default=None,
         description="Override HuggingFace model cache directory",
     )
+    asr_model_id: str = Field(
+        default="openai/whisper-large-v3-turbo",
+        description="Whisper ASR model for clone-mode auto-transcription (HF repo ID or local path)",
+    )
     device: Literal["auto", "cuda", "mps", "cpu"] = "cpu"
     num_step: int = Field(default=32, ge=1, le=64)  # Upstream default
 
@@ -81,7 +85,7 @@ class Settings(BaseSettings):
     max_concurrent: int = Field(
         default=2,
         ge=1,
-        le=16,
+        le=64,
         description="Max simultaneous inference calls",
     )
     request_timeout_s: int = Field(
@@ -93,6 +97,26 @@ class Settings(BaseSettings):
         ge=1,
         le=300,
         description="Seconds to wait for in-flight requests on shutdown",
+    )
+
+    # Triton optimization (omnivoice-triton)
+    enable_triton: bool = Field(
+        default=False,
+        description=(
+            "Enable omnivoice-triton kernel fusion + CUDA Graph optimization. "
+            "Only effective on CUDA device. ~4.66x speedup with hybrid+sage mode."
+        ),
+    )
+    triton_mode: Literal["triton", "faster", "hybrid"] = Field(
+        default="hybrid",
+        description=(
+            "Triton optimization mode: 'triton' (kernel fusion only), "
+            "'faster' (CUDA Graph only), 'hybrid' (both combined, fastest)."
+        ),
+    )
+    triton_enable_sage: bool = Field(
+        default=True,
+        description="Enable SageAttention quantized attention in triton mode.",
     )
 
     # Voice profiles

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import tempfile
+import time
 from collections.abc import AsyncIterator
 from contextlib import suppress
 from pathlib import Path
@@ -273,7 +274,11 @@ async def create_speech(
     cfg=Depends(_get_cfg),
 ):
     """Generate speech from text."""
+    t_start = time.monotonic()
+
+    t0 = time.monotonic()
     mode, instruct, ref_audio_path, ref_text = _resolve_synthesis_mode(body, profile_svc)
+    t_resolve = time.monotonic() - t0
 
     req = SynthesisRequest(
         text=body.input,
@@ -317,11 +322,20 @@ async def create_speech(
     timeout_s = _effective_timeout_s(body.request_timeout_s, cfg)
 
     try:
+        t0 = time.monotonic()
         if body.request_timeout_s is not None:
             result = await inference_svc.synthesize(req, timeout_override=body.request_timeout_s)
         else:
             result = await inference_svc.synthesize(req)
+        t_synth = time.monotonic() - t0
         metrics_svc.record_success(result.latency_s)
+        logger.info(
+            f"[TIMING] mode_resolve={t_resolve*1000:.1f}ms "
+            f"synthesis={t_synth*1000:.1f}ms "
+            f"(model_latency={result.latency_s*1000:.1f}ms "
+            f"queue={max(0, t_synth - result.latency_s)*1000:.1f}ms) "
+            f"audio_dur={result.duration_s:.2f}s"
+        )
     except asyncio.TimeoutError:
         metrics_svc.record_timeout()
         raise HTTPException(
@@ -338,7 +352,9 @@ async def create_speech(
 
     # Generate audio in requested format
     try:
+        t0 = time.monotonic()
         audio_bytes, media_type = tensors_to_formatted_bytes(result.tensors, body.response_format)
+        t_encode = time.monotonic() - t0
     except RuntimeError as e:
         # Format not available (e.g., pydub or ffmpeg missing)
         logger.warning(f"Format conversion failed: {e}")
@@ -346,6 +362,13 @@ async def create_speech(
             status_code=status.HTTP_501_NOT_IMPLEMENTED,
             detail=f"Audio format '{body.response_format}' not available: {e}",
         )
+
+    t_total = time.monotonic() - t_start
+    logger.info(
+        f"[TIMING] audio_encode={t_encode*1000:.1f}ms "
+        f"total={t_total*1000:.1f}ms "
+        f"format={body.response_format} bytes={len(audio_bytes)}"
+    )
 
     return Response(
         content=audio_bytes,
@@ -580,18 +603,27 @@ async def create_speech_clone(
 
         return _pcm_stream_response(clone_stream())
 
+    t_start = time.monotonic()
     with tempfile.TemporaryDirectory() as tmpdir:
         tmp_path = str(Path(tmpdir) / "ref_audio.wav")
         Path(tmp_path).write_bytes(audio_bytes)
         req = build_request(tmp_path)
         timeout_s = _effective_timeout_s(request_timeout_s, cfg)
 
+        t0 = time.monotonic()
         try:
             if request_timeout_s is not None:
                 result = await inference_svc.synthesize(req, timeout_override=request_timeout_s)
             else:
                 result = await inference_svc.synthesize(req)
+            t_synth = time.monotonic() - t0
             metrics_svc.record_success(result.latency_s)
+            logger.info(
+                f"[TIMING][clone] synthesis={t_synth*1000:.1f}ms "
+                f"(model_latency={result.latency_s*1000:.1f}ms "
+                f"queue={max(0, t_synth - result.latency_s)*1000:.1f}ms) "
+                f"audio_dur={result.duration_s:.2f}s"
+            )
         except asyncio.TimeoutError:
             metrics_svc.record_timeout()
             raise HTTPException(
@@ -607,13 +639,22 @@ async def create_speech_clone(
             )
 
         try:
+            t0 = time.monotonic()
             audio_output, media_type = tensors_to_formatted_bytes(result.tensors, response_format)
+            t_encode = time.monotonic() - t0
         except RuntimeError as e:
             logger.warning(f"Format conversion failed: {e}")
             raise HTTPException(
                 status_code=status.HTTP_501_NOT_IMPLEMENTED,
                 detail=f"Audio format '{response_format}' not available: {e}",
             )
+
+        t_total = time.monotonic() - t_start
+        logger.info(
+            f"[TIMING][clone] audio_encode={t_encode*1000:.1f}ms "
+            f"total={t_total*1000:.1f}ms "
+            f"format={response_format} bytes={len(audio_output)}"
+        )
 
         return Response(
             content=audio_output,

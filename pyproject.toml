@@ -8,7 +8,7 @@ version = "0.2.4"
 description = "OpenAI-compatible HTTP server for OmniVoice TTS"
 readme = "README.md"
 license = { text = "MIT" }
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 authors = [{ name = "zamery", email = "matthew.ngo1114@gmail.com" }]
 
 keywords = ["tts", "text-to-speech", "omnivoice", "openai", "fastapi", "voice-cloning"]
@@ -25,6 +25,9 @@ dependencies = [
     # OmniVoice is brand-new (April 2026) and its API may change in 0.2.x.
     # Widen this bound only after reviewing upstream changelogs.
     "omnivoice>=0.1.0,<0.2.0",
+    # omnivoice-triton: Triton kernel fusion + CUDA Graph optimization (4.66x speedup)
+    # Installed from local source; provides hybrid+sage inference mode.
+    "omnivoice-triton",
     "fastapi>=0.115.0",
     "uvicorn[standard]>=0.32.0",
     "python-multipart>=0.0.12",
@@ -34,6 +37,27 @@ dependencies = [
     "psutil>=6.0.0",
     "huggingface-hub>=0.26.0",
     "soundfile>=0.12.0",
+]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[tool.uv.sources]
+torch = { index = "pytorch-cu128" }
+torchaudio = { index = "pytorch-cu128" }
+# Install omnivoice-triton from the local checkout
+omnivoice-triton = { path = "/home/jyao/ADEO/tts/omnivoice/omnivoice-triton" }
+
+[tool.uv]
+# Pin torch/torchaudio to <2.12 to stay on cu128 index (2.12+ ships cu130 on PyPI)
+# Force numba/llvmlite to Python 3.12-compatible versions
+constraint-dependencies = [
+    "torch>=2.8.0,<2.12",
+    "torchaudio>=2.8.0,<2.12",
+    "numba>=0.60.0",
+    "llvmlite>=0.43.0",
 ]
 
 [project.optional-dependencies]

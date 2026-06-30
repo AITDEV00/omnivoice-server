@@ -31,6 +31,12 @@ def main() -> None:
         help="HuggingFace model ID or local path (env: OMNIVOICE_MODEL_ID)",
     )
     parser.add_argument(
+        "--asr-model",
+        default=None,
+        dest="asr_model_id",
+        help="Whisper ASR model for clone-mode auto-transcription (env: OMNIVOICE_ASR_MODEL_ID)",
+    )
+    parser.add_argument(
         "--device",
         default=None,
         choices=["auto", "cuda", "mps", "cpu"],
@@ -83,6 +89,29 @@ def main() -> None:
         default=None,
         dest="class_temperature",
         help="Token sampling temperature, 0-2 (env: OMNIVOICE_CLASS_TEMPERATURE)",
+    )
+
+    # Triton optimization
+    parser.add_argument(
+        "--enable-triton",
+        action="store_true",
+        default=None,
+        dest="enable_triton",
+        help="Enable omnivoice-triton optimization (env: OMNIVOICE_ENABLE_TRITON)",
+    )
+    parser.add_argument(
+        "--triton-mode",
+        default=None,
+        choices=["triton", "faster", "hybrid"],
+        dest="triton_mode",
+        help="Triton mode: triton (kernels), faster (CUDA Graph), hybrid (both) (env: OMNIVOICE_TRITON_MODE)",
+    )
+    parser.add_argument(
+        "--no-sage",
+        action="store_false",
+        default=None,
+        dest="triton_enable_sage",
+        help="Disable SageAttention (env: OMNIVOICE_TRITON_ENABLE_SAGE=false)",
     )
 
     # Inference

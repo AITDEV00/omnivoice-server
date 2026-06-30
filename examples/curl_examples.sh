@@ -88,6 +88,7 @@ curl -X POST "$BASE_URL/v1/audio/speech" \
     "model": "omnivoice",
     "input": "This is a longer text that will be streamed in chunks. Each sentence is synthesized and sent as soon as it is ready.",
     "stream": true,
+    "response_format": "pcm",
     "position_temperature": 0.0
   }' \
   --output output_stream.pcm \

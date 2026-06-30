@@ -377,14 +377,21 @@ class ScriptOrchestrator:
 
             try:
                 synthesis_result = await self._inference.synthesize(req)
-                if not synthesis_result.tensors or any(
-                    t.numel() == 0 for t in synthesis_result.tensors
-                ):
+                # OmniVoice.generate() returns list[np.ndarray] (1-D, shape (T,));
+                # convert to torch.Tensor and normalize to (1, T) so downstream code
+                # (mix_to_single_track, torch.cat with silence, etc.) works consistently.
+                tensors = [
+                    t if isinstance(t, torch.Tensor) else torch.from_numpy(t)
+                    for t in synthesis_result.tensors
+                ]
+                if not tensors or any(t.numel() == 0 for t in tensors):
                     raise HTTPException(
                         status_code=500,
                         detail=f"Segment {segment.index} produced empty audio",
                     )
-                audio_tensor = torch.cat(synthesis_result.tensors, dim=-1)
+                audio_tensor = torch.cat(tensors, dim=-1)
+                if audio_tensor.dim() == 1:
+                    audio_tensor = audio_tensor.unsqueeze(0)
 
                 result.synthesized_segments.append(
                     {

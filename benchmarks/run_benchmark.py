@@ -87,6 +87,8 @@ def main() -> None:
                         help="Warm-up runs (not counted)")
     parser.add_argument("--cases", nargs="+", default=list(TEST_CASES.keys()),
                         help="Test cases to run")
+    parser.add_argument("--model", default="k2-fsa/OmniVoice",
+                        help="Model checkpoint path or HuggingFace repo id")
     parser.add_argument("--output-dir", default="benchmarks/results",
                         help="Directory for CSV and report outputs")
     args = parser.parse_args()
@@ -105,7 +107,7 @@ def main() -> None:
 
     t0 = time.monotonic()
     model = OmniVoice.from_pretrained(
-        "k2-fsa/OmniVoice",
+        args.model,
         device_map=device_map,
         dtype=dtype,
     )
