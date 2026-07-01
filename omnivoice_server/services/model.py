@@ -92,12 +92,48 @@ class ModelService:
             f"(+{ram_after - ram_before:.0f}MB)"
         )
 
+        # Calculate dynamic max_input_chars based on available VRAM.
+        self._calc_max_input_chars()
+
         # Instrument internal generate() stages for pipeline timing analysis.
         # This wraps the model's internal methods (not the GPU kernels themselves)
         # to measure where CPU-side time is spent inside model.generate().
         self._instrument_generate_stages(self._model)
 
         self._loaded = True
+
+    def _calc_max_input_chars(self) -> None:
+        """Calculate max input text length based on available VRAM.
+
+        Uses 20% of free VRAM as the per-request budget. Empirically,
+        OmniVoice uses ~3 MiB per character of input text (amortized
+        across the 28-layer LLM + DAC audio decoder).
+
+        20% is safe because the CUDA graph capture floor is 25% —
+        even a max-length request leaves 5% headroom before capture
+        is skipped, and the 10% eviction threshold provides a second
+        safety net below that.
+        """
+        try:
+            free_bytes, total_bytes = torch.cuda.mem_get_info()
+            free_mib = free_bytes / (1024 * 1024)
+            # 20% of free VRAM is the per-request budget
+            budget_mib = free_mib * 0.20
+            # ~3 MiB per char (conservative, measured from bombardment tests)
+            chars = int(budget_mib / 3)
+            # Clamp to [200, 10000]
+            chars = max(200, min(chars, 10_000))
+            self.cfg.max_input_chars = chars
+            logger.info(
+                f"max_input_chars={chars} "
+                f"(free_vram={free_mib:.0f}MiB, budget={budget_mib:.0f}MiB, "
+                f"~3MiB/char)"
+            )
+        except Exception as e:
+            logger.warning(
+                f"Could not calculate max_input_chars from VRAM ({e}); "
+                f"using default {self.cfg.max_input_chars}"
+            )
 
     def _instrument_generate_stages(self, model) -> None:
         """Wrap OmniVoice.generate() internal methods with timing logs.

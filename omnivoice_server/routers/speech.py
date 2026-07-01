@@ -44,7 +44,8 @@ class SpeechRequest(BaseModel):
     """OpenAI TTS API compatible request body."""
 
     model: str = Field(default="omnivoice")
-    input: str = Field(..., min_length=1, max_length=10_000)
+    input: str = Field(..., min_length=1)
+    # max_length is validated at runtime against cfg.max_input_chars (dynamic VRAM-based limit)
     voice: str = Field(default="auto")
     speaker: str | None = Field(default=None)
     instructions: str | None = Field(default=None)
@@ -110,6 +111,21 @@ def _pcm_stream_response(stream_iter: AsyncIterator[bytes]) -> StreamingResponse
     )
 
 
+def _explicit_clone_or_unknown(
+    raw: str | None, preset: str | None
+) -> bool:
+    """Return True if raw is a clone: prefix or not a known preset.
+
+    Used to decide whether to attempt profile lookup. Known presets
+    (onyx, nova, etc.) skip the lookup entirely.
+    """
+    if raw is None:
+        return False
+    if raw.lower().startswith("clone:"):
+        return True
+    return preset is None
+
+
 def _resolve_synthesis_mode(
     body: SpeechRequest,
     profile_svc: ProfileService,
@@ -162,7 +178,15 @@ def _resolve_synthesis_mode(
                 ),
             )
 
-    profile_to_check = speaker_raw or voice_raw
+    # Only attempt profile lookup if the voice/speaker is NOT a known preset.
+    # Presets (onyx, nova, etc.) are DESIGN mode — they don't need audio files.
+    # Checking profiles first causes a noisy WARNING on every preset request.
+    profile_to_check = None
+    if _explicit_clone_or_unknown(speaker_raw, speaker_preset):
+        profile_to_check = speaker_raw
+    elif _explicit_clone_or_unknown(voice_raw, voice_preset):
+        profile_to_check = voice_raw
+
     if profile_to_check:
         profile_id = profile_to_check
         explicit_clone = profile_id.lower().startswith("clone:")
@@ -275,6 +299,15 @@ async def create_speech(
 ):
     """Generate speech from text."""
     t_start = time.monotonic()
+
+    if len(body.input) > cfg.max_input_chars:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=(
+                f"Input text length {len(body.input)} exceeds maximum "
+                f"of {cfg.max_input_chars} characters (based on available VRAM)."
+            ),
+        )
 
     t0 = time.monotonic()
     mode, instruct, ref_audio_path, ref_text = _resolve_synthesis_mode(body, profile_svc)
@@ -499,7 +532,8 @@ async def _stream_sentences_overlapped(
 @router.post("/audio/speech/clone")
 async def create_speech_clone(
     request: Request,
-    text: str = Form(..., min_length=1, max_length=10_000),
+    # max_length validated at runtime against cfg.max_input_chars (dynamic VRAM-based limit)
+    text: str = Form(..., min_length=1),
     ref_audio: UploadFile = File(...),
     ref_text: str | None = Form(default=None),
     response_format: ResponseFormat = Form(default="wav"),
@@ -527,6 +561,16 @@ async def create_speech_clone(
     cfg=Depends(_get_cfg),
 ):
     """One-shot voice cloning. Upload reference audio + text to synthesize."""
+
+    if len(text) > cfg.max_input_chars:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=(
+                f"Input text length {len(text)} exceeds maximum "
+                f"of {cfg.max_input_chars} characters (based on available VRAM)."
+            ),
+        )
+
     # Fail-fast: reject oversized uploads before reading body
     content_length = request.headers.get("content-length")
     if content_length is not None:

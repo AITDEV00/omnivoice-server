@@ -36,6 +36,8 @@ async def list_models(request: Request):
                 "permission": [],
                 "root": cfg.model_id,
                 "parent": None,
+                "max_input_chars": cfg.max_input_chars,
+                "max_input_words": cfg.max_input_chars // 5,
             },
             # Also advertise OpenAI alias names so drop-in clients that set
             # model="tts-1" don't get confused.
@@ -47,6 +49,8 @@ async def list_models(request: Request):
                 "permission": [],
                 "root": cfg.model_id,
                 "parent": "omnivoice",
+                "max_input_chars": cfg.max_input_chars,
+                "max_input_words": cfg.max_input_chars // 5,
             },
             {
                 "id": "tts-1-hd",
@@ -56,6 +60,8 @@ async def list_models(request: Request):
                 "permission": [],
                 "root": cfg.model_id,
                 "parent": "omnivoice",
+                "max_input_chars": cfg.max_input_chars,
+                "max_input_words": cfg.max_input_chars // 5,
             },
         ],
     }
@@ -80,4 +86,6 @@ async def get_model(model_id: str, request: Request):
         "owned_by": "k2-fsa",
         "root": cfg.model_id,
         "parent": None if model_id == "omnivoice" else "omnivoice",
+        "max_input_chars": cfg.max_input_chars,
+        "max_input_words": cfg.max_input_chars // 5,
     }

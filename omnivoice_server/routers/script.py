@@ -33,7 +33,8 @@ class ScriptSegment(BaseModel):
     """Single segment in a multi-speaker script."""
 
     speaker: str = Field(..., min_length=1, max_length=64)
-    text: str = Field(..., min_length=1, max_length=10_000)
+    text: str = Field(..., min_length=1)
+    # max_length validated at runtime against cfg.max_input_chars (dynamic VRAM-based limit)
     voice: str | None = Field(default=None)
     speed: float | None = Field(default=None, ge=0.25, le=4.0)
 
@@ -106,10 +107,15 @@ def _get_orchestrator(request: Request) -> ScriptOrchestrator:
     return request.app.state.script_orchestrator
 
 
+def _get_cfg(request: Request):
+    return request.app.state.cfg
+
+
 @router.post("/audio/script")
 async def create_script_audio(
     body: ScriptRequest,
     orchestrator: ScriptOrchestrator = Depends(_get_orchestrator),
+    cfg=Depends(_get_cfg),
 ):
     """
     Synthesize multi-speaker script with voice resolution and mixing.
@@ -118,6 +124,17 @@ async def create_script_audio(
     - single_track: Binary audio with metadata headers
     - multi_track: JSON with per-speaker tracks and segment timestamps
     """
+    # Validate per-segment text length against dynamic VRAM-based limit
+    for i, seg in enumerate(body.script):
+        if len(seg.text) > cfg.max_input_chars:
+            raise HTTPException(
+                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+                detail=(
+                    f"Segment {i} text length {len(seg.text)} exceeds maximum "
+                    f"of {cfg.max_input_chars} characters (based on available VRAM)."
+                ),
+            )
+
     # Create adapter request for orchestrator
     adapter = _ScriptAdapterRequest(
         segments=body.script,

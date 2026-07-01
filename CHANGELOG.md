@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Dynamic `max_input_chars` calculated from available VRAM at model load time
+  - Uses 20% of free VRAM as the per-request budget (~3 MiB per input char)
+  - Clamped to [200, 10000] for safety
+  - Logged at startup: `max_input_chars=N (free_vram=XMiB, budget=YMib, ~3MiB/char)`
+- `max_input_chars` and `max_input_words` fields exposed in `/v1/models` endpoint responses
+- Runtime validation on all synthesis endpoints:
+  - `POST /v1/audio/speech` — rejects input exceeding `max_input_chars` with HTTP 413
+  - `POST /v1/audio/speech/clone` — rejects text exceeding `max_input_chars` with HTTP 413
+  - `POST /v1/audio/script` — rejects any segment text exceeding `max_input_chars` with HTTP 413
+
+### Fixed
+
+- Voice preset lookup order: OpenAI-compatible presets (onyx, alloy, echo, etc.) are now resolved before profile lookup, eliminating spurious "Profile audio NOT FOUND" WARNING logs for known preset voices
+
 ## [0.2.4] - 2026-05-12
 
 ### Added

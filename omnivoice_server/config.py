@@ -177,6 +177,15 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Dynamic limit — calculated at model load from available VRAM.
+    # Defaults to 10000 (hard ceiling) until overridden by ModelService.
+    max_input_chars: int = Field(
+        default=10_000,
+        ge=100,
+        le=10_000,
+        description="Max input text length in chars. Auto-calculated from VRAM at startup.",
+    )
+
     @property
     def max_ref_audio_bytes(self) -> int:
         """Return max upload size in bytes."""
