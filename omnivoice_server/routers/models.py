@@ -39,30 +39,6 @@ async def list_models(request: Request):
                 "max_input_chars": cfg.max_input_chars,
                 "max_input_words": cfg.max_input_chars // 5,
             },
-            # Also advertise OpenAI alias names so drop-in clients that set
-            # model="tts-1" don't get confused.
-            {
-                "id": "tts-1",
-                "object": "model",
-                "created": int(time.time()),
-                "owned_by": "k2-fsa",
-                "permission": [],
-                "root": cfg.model_id,
-                "parent": "omnivoice",
-                "max_input_chars": cfg.max_input_chars,
-                "max_input_words": cfg.max_input_chars // 5,
-            },
-            {
-                "id": "tts-1-hd",
-                "object": "model",
-                "created": int(time.time()),
-                "owned_by": "k2-fsa",
-                "permission": [],
-                "root": cfg.model_id,
-                "parent": "omnivoice",
-                "max_input_chars": cfg.max_input_chars,
-                "max_input_words": cfg.max_input_chars // 5,
-            },
         ],
     }
 
@@ -71,7 +47,7 @@ async def list_models(request: Request):
 async def get_model(model_id: str, request: Request):
     """Retrieve a specific model by ID."""
     cfg = request.app.state.cfg
-    valid = {"omnivoice", "tts-1", "tts-1-hd"}
+    valid = {"omnivoice"}
     if model_id not in valid:
         from fastapi import HTTPException, status
 
@@ -85,7 +61,7 @@ async def get_model(model_id: str, request: Request):
         "created": int(time.time()),
         "owned_by": "k2-fsa",
         "root": cfg.model_id,
-        "parent": None if model_id == "omnivoice" else "omnivoice",
+        "parent": None,
         "max_input_chars": cfg.max_input_chars,
         "max_input_words": cfg.max_input_chars // 5,
     }

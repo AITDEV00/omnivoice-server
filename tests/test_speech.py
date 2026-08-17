@@ -422,9 +422,13 @@ def test_speech_conflicting_clone_and_preset_fields_return_422(client, sample_au
     assert "Ambiguous request" in resp.text
 
 
-def test_speech_openai_model_names_accepted(client):
-    """tts-1 and tts-1-hd should be accepted for drop-in compatibility."""
-    for model_name in ("tts-1", "tts-1-hd", "omnivoice"):
+def test_speech_unknown_model_rejected(client):
+    """OpenAI alias names (tts-1, tts-1-hd) and other unknowns are rejected.
+
+    Aliases are resolved at the gateway layer; the server itself only accepts
+    model='omnivoice'.
+    """
+    for model_name in ("tts-1", "tts-1-hd", "gpt-4o-mini-tts", "random-model"):
         resp = client.post(
             "/v1/audio/speech",
             json={
@@ -432,7 +436,19 @@ def test_speech_openai_model_names_accepted(client):
                 "input": "Hello",
             },
         )
-        assert resp.status_code == 200, f"Failed for model={model_name}"
+        assert resp.status_code == 422, f"Expected 422 for model={model_name}, got {resp.status_code}"
+
+
+def test_speech_omnivoice_model_accepted(client):
+    """model='omnivoice' (the only valid id) is accepted."""
+    resp = client.post(
+        "/v1/audio/speech",
+        json={
+            "model": "omnivoice",
+            "input": "Hello",
+        },
+    )
+    assert resp.status_code == 200
 
 
 def test_speech_pcm_format(client):

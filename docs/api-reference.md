@@ -124,30 +124,12 @@ curl http://localhost:8080/v1/models
       "permission": [],
       "root": "/home/runner/models/OmniVoice",
       "parent": null
-    },
-    {
-      "id": "tts-1",
-      "object": "model",
-      "created": 1782834444,
-      "owned_by": "k2-fsa",
-      "permission": [],
-      "root": "/home/runner/models/OmniVoice",
-      "parent": "omnivoice"
-    },
-    {
-      "id": "tts-1-hd",
-      "object": "model",
-      "created": 1782834444,
-      "owned_by": "k2-fsa",
-      "permission": [],
-      "root": "/home/runner/models/OmniVoice",
-      "parent": "omnivoice"
     }
   ]
 }
 ```
 
-> `omnivoice`, `tts-1`, and `tts-1-hd` all map to the same underlying model. The aliases exist for OpenAI SDK drop-in compatibility.
+> The server advertises a single model id, `omnivoice`. OpenAI alias names (`tts-1`, `tts-1-hd`) are intentionally not exposed here — resolve them at the gateway layer if drop-in compatibility is needed.
 
 ---
 
@@ -163,7 +145,7 @@ curl http://localhost:8080/v1/models/omnivoice
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `model_id` | string | Yes | One of: `omnivoice`, `tts-1`, `tts-1-hd` |
+| `model_id` | string | Yes | Must be: `omnivoice` |
 
 **Response (200):**
 ```json
@@ -181,7 +163,7 @@ curl http://localhost:8080/v1/models/omnivoice
 **Response (404):**
 ```json
 {
-  "detail": "Model 'gpt-4' not found. Available: ['omnivoice', 'tts-1', 'tts-1-hd']"
+  "detail": "Model 'gpt-4' not found. Available: ['omnivoice']"
 }
 ```
 
@@ -477,7 +459,7 @@ curl -X POST http://localhost:8080/v1/audio/speech \
 
 | Parameter | Type | Required | Default | Range | Description |
 |-----------|------|----------|---------|-------|-------------|
-| `model` | string | No | `"omnivoice"` | `omnivoice`, `tts-1`, `tts-1-hd` | Model alias (all map to same engine) |
+| `model` | string | No | `"omnivoice"` | `omnivoice` | Model id (the only accepted value). OpenAI alias names like `tts-1` are rejected here; resolve them at the gateway. |
 | `input` | string | Yes | — | 1–10,000 chars | Text to synthesize |
 | `voice` | string | No | `"auto"` | See [Voice Reference](#voice-reference) | Voice selector: preset name, `clone:<id>`, `design:<attrs>`, or `auto` |
 | `instructions` | string | No | `null` | Design attributes | Voice design attributes (e.g. `"female,british accent"`) |
@@ -847,7 +829,7 @@ client = OpenAI(
 )
 
 response = client.audio.speech.create(
-    model="tts-1",
+    model="omnivoice",
     voice="nova",
     input="Hello from the OpenAI SDK!",
 )

@@ -73,8 +73,14 @@ class SpeechRequest(BaseModel):
     @field_validator("model")
     @classmethod
     def validate_model(cls, v: str) -> str:
-        if v not in ("omnivoice", "tts-1", "tts-1-hd"):
-            logger.debug(f"model='{v}' mapped to omnivoice")
+        # Only "omnivoice" is a valid model id. OpenAI alias names (tts-1,
+        # tts-1-hd) are handled at the gateway layer; clients hitting this
+        # server directly must use "omnivoice".
+        if v != "omnivoice":
+            raise ValueError(
+                f"Unknown model '{v}'. This server only accepts model='omnivoice'. "
+                f"OpenAI alias names (tts-1, tts-1-hd) should be resolved at the gateway."
+            )
         return v
 
 

@@ -1432,9 +1432,11 @@ class SpeechRequest(BaseModel):
     @field_validator("model")
     @classmethod
     def validate_model(cls, v: str) -> str:
-        if v not in ("omnivoice", "tts-1", "tts-1-hd"):
-            # Accept OpenAI model names for drop-in compatibility
-            logger.debug(f"model='{v}' mapped to omnivoice")
+        if v != "omnivoice":
+            raise ValueError(
+                f"Unknown model '{v}'. This server only accepts model='omnivoice'. "
+                f"OpenAI alias names (tts-1, tts-1-hd) should be resolved at the gateway."
+            )
         return v
 
 
@@ -2437,14 +2439,27 @@ def test_speech_clone_unknown_profile(client):
     assert resp.status_code == 404
 
 
-def test_speech_openai_model_names_accepted(client):
-    """tts-1 and tts-1-hd should be accepted for drop-in compatibility."""
-    for model_name in ("tts-1", "tts-1-hd", "omnivoice"):
+def test_speech_unknown_model_rejected(client):
+    """OpenAI alias names (tts-1, tts-1-hd) and other unknowns are rejected.
+
+    Aliases are resolved at the gateway layer; the server itself only accepts
+    model='omnivoice'.
+    """
+    for model_name in ("tts-1", "tts-1-hd", "gpt-4o-mini-tts", "random-model"):
         resp = client.post("/v1/audio/speech", json={
             "model": model_name,
             "input": "Hello",
         })
-        assert resp.status_code == 200, f"Failed for model={model_name}"
+        assert resp.status_code == 422, f"Expected 422 for model={model_name}, got {resp.status_code}"
+
+
+def test_speech_omnivoice_model_accepted(client):
+    """model='omnivoice' (the only valid id) is accepted."""
+    resp = client.post("/v1/audio/speech", json={
+        "model": "omnivoice",
+        "input": "Hello",
+    })
+    assert resp.status_code == 200
 
 
 def test_speech_pcm_format(client):

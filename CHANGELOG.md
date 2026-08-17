@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `POST /v1/audio/speech/clone` — rejects text exceeding `max_input_chars` with HTTP 413
   - `POST /v1/audio/script` — rejects any segment text exceeding `max_input_chars` with HTTP 413
 
+### Changed
+
+- Removed OpenAI model aliases (`tts-1`, `tts-1-hd`) from `/v1/models` listing and `/v1/audio/speech` validation. The server now advertises and accepts only `model='omnivoice'`. OpenAI alias resolution (drop-in compatibility) should be handled at the gateway layer instead.
+
 ### Fixed
 
 - Voice preset lookup order: OpenAI-compatible presets (onyx, alloy, echo, etc.) are now resolved before profile lookup, eliminating spurious "Profile audio NOT FOUND" WARNING logs for known preset voices
