@@ -1,0 +1,47 @@
+# Keep the build context lean.
+# IMPORTANT: do NOT exclude models/, profiles/, scripts/, or vendor/ —
+# Dockerfile.internal COPYs them.
+
+.git
+.github
+.gitignore
+.editorconfig
+.pre-commit-config.yaml
+
+# Speaker profiles ship in the open WAV format only (profiles/<id>/ref_audio.wav).
+# The vLLM-Omni .pt originals in models/OT_v1/speaker_profiles/ are a build-time
+# input that is converted ahead of the build — never bake PyTorch pickles into
+# the image (opaque format + arbitrary-code-execution risk on load).
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.bin
+
+# Docs & non-runtime assets
+docs
+tests
+benchmarks
+samples
+voice_samples
+examples
+remote-tests
+
+# Local/dev artifacts
+**/__pycache__/**
+*.pyc
+*.pyo
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+.venv
+venv
+.env
+.env.local
+*.log
+
+# OS/IDE
+.vscode
+.idea
+.DS_Store
