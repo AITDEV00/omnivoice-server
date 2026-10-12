@@ -1,9 +1,0 @@
-FROM registry.adeoaiengine.ecouncil.ae/openinnovationai/platform/mlops/mlops-serving/omnivoice-server:latest
-
-# Only model.safetensors actually differs from the base image.
-COPY --chown=runner:runner models/OT_v1/model.safetensors /home/runner/models/OmniVoice/model.safetensors
-COPY --chown=runner:runner profiles /home/runner/profiles-baked
-COPY --chown=runner:runner --chmod=755 scripts/internal/entrypoint.sh /usr/local/bin/entrypoint.sh
-
-USER runner
-ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
