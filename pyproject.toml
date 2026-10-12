@@ -47,8 +47,11 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cu128" }
 torchaudio = { index = "pytorch-cu128" }
-# Install omnivoice-triton from the local checkout
-omnivoice-triton = { path = "/home/jyao/ADEO/tts/omnivoice/omnivoice-triton" }
+# Install omnivoice-triton from the local checkout.
+# Relative on purpose: the checkout is expected to be a SIBLING directory.
+# This holds for both the dev layout and the omnivoice-stack superproject,
+# where omnivoice-triton is a submodule next to this repo.
+omnivoice-triton = { path = "../omnivoice-triton" }
 
 [tool.uv]
 # Pin torch/torchaudio to <2.12 to stay on cu128 index (2.12+ ships cu130 on PyPI)

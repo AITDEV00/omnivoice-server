@@ -1455,7 +1455,7 @@ requires-dist = [
     { name = "huggingface-hub", specifier = ">=0.26.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.11.0" },
     { name = "omnivoice", specifier = ">=0.1.0,<0.2.0" },
-    { name = "omnivoice-triton", directory = "/home/jyao/ADEO/tts/omnivoice/omnivoice-triton" },
+    { name = "omnivoice-triton", directory = "../omnivoice-triton" },
     { name = "platformdirs", specifier = ">=3.0.0" },
     { name = "psutil", specifier = ">=6.0.0" },
     { name = "psutil", marker = "extra == 'benchmark'" },
@@ -1477,7 +1477,7 @@ provides-extras = ["formats", "benchmark", "dev"]
 [[package]]
 name = "omnivoice-triton"
 version = "0.1.0"
-source = { directory = "/home/jyao/ADEO/tts/omnivoice/omnivoice-triton" }
+source = { directory = "../omnivoice-triton" }
 dependencies = [
     { name = "accelerate" },
     { name = "huggingface-hub" },
